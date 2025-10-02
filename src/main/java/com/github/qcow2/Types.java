@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright 2023 Damian Peckett <damian@peckett>.
  *
@@ -18,6 +19,7 @@
 package com.github.qcow2;
 
 import java.util.List;
+
 
 public class Types {
 

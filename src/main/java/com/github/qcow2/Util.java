@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright 2023 Damian Peckett <damian@peckett>.
  *
@@ -23,6 +24,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
+
 
 public class Util {
 

@@ -1,66 +1,81 @@
-/* SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-License-Identifier: Apache-2.0
  *
  * This is a port of the Go test from the original project.
- *
  */
+
 package com.github.qcow2;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-
-import java.io.*;
-import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.github.qcow2.Qcow2.Image;
+import vavi.util.Debug;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 
 public class Qcow2Test {
 
     private static final String TEST_IMAGE_URL = "https://download.cirros-cloud.net/0.5.1/cirros-0.5.1-x86_64-disk.img";
     private static final String TEST_IMAGE_SHA256 = "f8d297a47fd2017a776a2975919c90ba27131e2083fbf38ca434ba26a8b0dd6e";
 
-    @Rule
-    public TemporaryFolder tempFolder = new TemporaryFolder();
+    private static Path testImage;
 
-    private File testImage;
-
-    @Before
-    public void setUp() throws IOException {
-        testImage = new File("testdata/cirros-0.5.1-x86_64-disk.img");
-        if (!testImage.exists()) {
+    @BeforeAll
+    static void setUp() throws IOException {
+        testImage = Path.of("tmp", "cirros-0.5.1-x86_64-disk.img");
+        if (!Files.exists(testImage)) {
             System.out.println("Downloading test image...");
-            testImage.getParentFile().mkdirs();
-            downloadFile(testImage.getAbsolutePath(), TEST_IMAGE_URL);
+            if (!Files.exists(testImage.getParent())) Files.createDirectories(testImage.getParent());
+            Files.copy(URI.create(TEST_IMAGE_URL).toURL().openStream(), testImage.toAbsolutePath());
         }
     }
 
-    @org.junit.Ignore
+    // it takes 5 minutes to do this test
     @Test
+    @EnabledIfSystemProperty(named = "vavi.test", matches = "ide")
     public void testImageEndToEnd() throws IOException, InterruptedException {
-        try (Image input = Qcow2.open(testImage.getAbsolutePath(), true)) {
+        try (Image input = Qcow2.open(testImage.toAbsolutePath().toString(), true)) {
             long size = input.getSize();
-            assertThat(size).isEqualTo(117440512L);
+            assertEquals(117440512L, size);
 
-            File outputFile = tempFolder.newFile("output.qcow2");
-            try (Image output = Qcow2.create(outputFile.getAbsolutePath(), size)) {
-                byte[] buffer = new byte[8192];
+            Path outputFile = Path.of("tmp", "output.qcow2");
+Debug.print(testImage + " to " + outputFile + ", size " + size);
+System.err.println();
+            int write = 0;
+            try (Image output = Qcow2.create(outputFile.toAbsolutePath().toString(), size)) {
+                byte[] buffer = new byte[8192 * 16];
                 int bytesRead;
-                while ((bytesRead = input.read(buffer)) != -1) {
+                while ((bytesRead = input.read(buffer)) > 0) { // heavy loop
                     output.write(buffer, 0, bytesRead);
+write += bytesRead;
+System.err.print(".");
+System.err.flush();
+if ((write % (buffer.length * 100)) == 0) System.err.println();
                 }
             }
+System.err.println();
 
             // Verify with qemu-img if available
-            File rawFile = tempFolder.newFile("output.raw");
-            ProcessBuilder pb = new ProcessBuilder("qemu-img", "convert", "-f", "qcow2", "-O", "raw", outputFile.getAbsolutePath(), rawFile.getAbsolutePath());
+            Path rawFile = Path.of("tmp", "output.raw");
+Debug.print("create " + rawFile);
+            ProcessBuilder pb = new ProcessBuilder("qemu-img", "convert", "-f", "qcow2", "-O", "raw", outputFile.toAbsolutePath().toString(), rawFile.toAbsolutePath().toString());
+Debug.print(pb.command());
             Process p = pb.start();
             int exitCode = p.waitFor();
 
@@ -69,16 +84,18 @@ public class Qcow2Test {
                 return;
             }
 
+Debug.print("check num of " + rawFile);
             String sum = hashFile(rawFile);
-            assertThat(sum).isEqualTo(TEST_IMAGE_SHA256);
+            assertEquals(TEST_IMAGE_SHA256, sum);
         }
+Debug.print("done");
     }
 
     @Test
     public void testImageRandomReadsAndWrites() throws IOException {
-        File imageFile = tempFolder.newFile("test.qcow2");
+        Path imageFile = Path.of("tmp", "test.qcow2");
         // Reduce image size to 64MB to speed up test
-        try (Image image = Qcow2.create(imageFile.getAbsolutePath(), 1L << 26)) {
+        try (Image image = Qcow2.create(imageFile.toAbsolutePath().toString(), 1L << 26)) {
             long imageSize = image.getSize();
             List<Block> blocks = new ArrayList<>();
             Random rng = new Random();
@@ -98,13 +115,13 @@ public class Qcow2Test {
                 rng.nextBytes(data);
 
                 int n = image.writeAt(data, offset);
-                assertThat(n).isEqualTo(data.length);
+                assertEquals(data.length, n);
 
                 byte[] readData = new byte[blockSize];
                 n = image.readAt(readData, offset);
-                assertThat(n).isEqualTo(data.length);
+                assertEquals(data.length, n);
 
-                assertThat(readData).isEqualTo(data);
+                assertArrayEquals(data, readData);
             }
 
             image.sync();
@@ -116,13 +133,13 @@ public class Qcow2Test {
                 rng.nextBytes(data);
 
                 int n = image.writeAt(data, b.offset);
-                assertThat(n).isEqualTo(data.length);
+                assertEquals(data.length, n);
 
                 byte[] readData = new byte[b.size];
                 n = image.readAt(readData, b.offset);
-                assertThat(n).isEqualTo(data.length);
+                assertEquals(data.length, n);
 
-                assertThat(readData).isEqualTo(data);
+                assertArrayEquals(data, readData);
             }
         }
     }
@@ -137,7 +154,7 @@ public class Qcow2Test {
         }
     }
 
-    private boolean checkBlockOverlap(Block newBlock, List<Block> blocks) {
+    private static boolean checkBlockOverlap(Block newBlock, List<Block> blocks) {
         for (Block b : blocks) {
             if (overlap(newBlock.offset, newBlock.size, b.offset, b.size)) {
                 return true;
@@ -146,20 +163,12 @@ public class Qcow2Test {
         return false;
     }
 
-    private boolean overlap(long a, long aSize, long b, long bSize) {
+    private static boolean overlap(long a, long aSize, long b, long bSize) {
         return a < b + bSize && b < a + aSize;
     }
 
-    private void downloadFile(String path, String urlString) throws IOException {
-        URL url = new URL(urlString);
-        try (ReadableByteChannel rbc = Channels.newChannel(url.openStream());
-             FileOutputStream fos = new FileOutputStream(path)) {
-            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
-        }
-    }
-
-    private String hashFile(File file) throws IOException {
-        try (InputStream is = new FileInputStream(file)) {
+    private static String hashFile(Path file) throws IOException {
+        try (InputStream is = Files.newInputStream(file)) {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             int bytesRead;

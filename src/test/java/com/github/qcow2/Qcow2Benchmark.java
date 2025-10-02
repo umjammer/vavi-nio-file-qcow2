@@ -1,7 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-License-Identifier: Apache-2.0
  *
  * This is a port of the Go benchmark tool from the original project.
- *
  */
 
 package com.github.qcow2;
@@ -17,6 +17,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.CRC32;
+
+import com.github.qcow2.Qcow2.Image;
+
 
 public class Qcow2Benchmark {
 
@@ -43,12 +46,13 @@ public class Qcow2Benchmark {
         }
     }
 
+    // TODO causes too many open files
     public static void main(String[] args) throws IOException, InterruptedException {
         Random rng = new Random();
         Path tempDir = Files.createTempDirectory("qcow2-benchmark");
-        File imageFile = new File(tempDir.toFile(), "test.qcow2");
+        Path imageFile = Path.of("tmp", "test.qcow2");
 
-        try (Image image = Qcow2.create(imageFile.getAbsolutePath(), 1L << 30)) {
+        try (Image image = Qcow2.create(imageFile.toAbsolutePath().toString(), 1L << 30)) {
             long imageSize = image.getSize();
 
             List<Block> blocks = new ArrayList<>();

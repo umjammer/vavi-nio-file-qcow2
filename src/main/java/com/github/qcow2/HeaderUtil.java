@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright 2023 Damian Peckett <damian@peckett>.
  *
@@ -17,13 +18,27 @@
 
 package com.github.qcow2;
 
-import com.github.qcow2.Types.*;
-
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.github.qcow2.Types.CompressionType;
+import com.github.qcow2.Types.EncryptionMethod;
+import com.github.qcow2.Types.Header;
+import com.github.qcow2.Types.HeaderAdditionalFields;
+import com.github.qcow2.Types.HeaderAndAdditionalFields;
+import com.github.qcow2.Types.HeaderExtension;
+import com.github.qcow2.Types.HeaderExtensionMetadata;
+import com.github.qcow2.Types.HeaderExtensionType;
+import com.github.qcow2.Types.L1TableEntry;
+import com.github.qcow2.Types.Version;
+
 
 public class HeaderUtil {
 
