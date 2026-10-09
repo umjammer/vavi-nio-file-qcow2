@@ -141,7 +141,7 @@ public final class Qcow2FileSystemDriver extends ExtendedFileSystemDriver<File> 
 
     @Override
     protected File moveEntry(File sourceEntry, File targetParentEntry, Path source, Path target, boolean targetIsParent) throws IOException {
-        File targetEntry = getEntry(targetIsParent ? target.resolve(toFilenameString(source)) : target, false);
+        File targetEntry = getEntry(target, false);
         Files.move(sourceEntry.toPath(), targetEntry.toPath());
         return targetEntry;
     }
